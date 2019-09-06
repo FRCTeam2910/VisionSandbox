@@ -6,3 +6,9 @@
 \.vscode/launch\.json
 
 \.vscode/settings\.json
+
+*.json
+
+*.sqlite
+
+.vs/VisionSandbox/v15/.suo

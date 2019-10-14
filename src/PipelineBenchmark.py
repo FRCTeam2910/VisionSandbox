@@ -1,4 +1,3 @@
-from src.PipelineConfigurator.tkinter.PipelineConfigurator import Application
 import src.Util.VisionUtil.CVCamera as CVCamera
 import src.Util.VisionUtil.VisionUtil as VisionUtil
 import src.Util.VisionUtil.Contour as Contour
@@ -14,9 +13,6 @@ import tkinter as tk
 from PIL import ImageTk, Image
 import time
 
-# import warnings
-# warnings.filterwarnings("error")
-
 CVCamera = CVCamera.CVCamera
 VisionUtil = VisionUtil.VisionUtil
 Contour = Contour.Contour
@@ -25,17 +21,20 @@ Vector3 = Vector3.Vector3
 Rotation3 = Rotation3.Rotation3
 RigidTransform3 = RigidTransform3.RigidTransform3
 
-PATH_TO_CONFIG_FILE = 'test/MiscTestScripts/CameraConfig.cfg'
+# 640x480
+resolution = (640, 480)
+frameSize = 307200
+frameMidpoint = (320, 240)
+framerate = 60
+
+distortionCoefficients = []
+cameraMatrix = []
+
 PATH_TO_TARGET_FILE = 'test/MiscTestScripts/TargetModel.mdl'
-
-cap = CVCamera(PATH_TO_CONFIG_FILE, 0)
-
 targetModel = open('test/MiscTestScripts/TargetModel.mdl', 'r')
 objectPoints = np.array(json.loads(targetModel.readline()), dtype=np.float32)
 
 font = cv.FONT_HERSHEY_SIMPLEX
-
-app = Application()
 
 def findContours(img):
     contours, hierarchy = cv.findContours(img, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
@@ -228,118 +227,102 @@ def rotateImage(img, angle):
     rotatedImg = cv.warpAffine(img, rotationMatrix, (widthBound, heightBound))
     return rotatedImg
 
-def pipeline():
-    ret, frame = cap.getFrame()
-    cameraSetupFrame = app.getController().frames['CameraSetupFrame']
-    hsvFrame = app.getController().frames['HSVFrame']
-    contourFilteringFrame = app.getController().frames['ContourFilteringFrame']
-    contourPairingFrame = app.getController().frames['ContourPairingFrame']
-    poseEstimationFrame = app.getController().frames['PoseEstimationFrame']
-    if (ret):
-        angle = cameraSetupFrame.getImageRotation()
-        if (angle != 0):
-            frame = rotateImage(frame, angle)
+def pipeline(frame):
+    pipelineStart = time.time()
+    #  Now we threshold
+    frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+    minThresh = (59, 166, 139)
+    maxThresh = (73, 255, 255)
+    frame_threshold = cv.inRange(frame_hsv, minThresh, maxThresh)
 
-        blurOption = cameraSetupFrame.getBlurOption()
-        if (blurOption == 'median'):
-            frame = cv.medianBlur(frame, cameraSetupFrame.getAperatureSize())
-        elif (blurOption == 'gaussian'):
-            frame = cv.GaussianBlur(frame, cameraSetupFrame.getGaussianKernelSize(), cameraSetupFrame.getSigmaX(), cameraSetupFrame.getSigmaY())
+    performErosion = False
+    shapeOfErosionKernel = cv.MORPH_RECT
+    sizeOfErosionKernel = (3, 3)
+    erosionKernelAnchor = (-1, -1)
+    erosionAnchor = (-1, -1)
+    erosionIterations = 1
 
-        # Convert to RGB so colors will appear correctly in the GUI
-        frame_rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        cameraSetupFrame.updateCanvas(frame_rgb)
+    performDilation = False
+    shapeOfDilationKernel = cv.MORPH_RECT
+    sizeOfDilationKernel = (3, 3)
+    dilationKernelAnchor = (-1, -1)
+    dilationAnchor = (-1, -1)
+    dilationIterations = 1
+    # Check if we should perform a erosion
+    if (performErosion):
+        erosionKernel = cv.getStructuringElement(shapeOfErosionKernel, sizeOfErosionKernel, anchor=erosionKernelAnchor)
+        frame_threshold = cv.erode(frame_threshold, erosionKernel, anchor=erosionAnchor, iterations=erosionIterations)
 
-        start = time.time()
-        #  Now we threshold
-        frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-        frame_threshold = cv.inRange(frame_hsv, hsvFrame.getLowTresholdingValues(), hsvFrame.getHighTresholdingValues())
+    # Check if we should perform a dilation
+    if (performDilation):
+        dilationKernel = cv.getStructuringElement(shapeOfDilationKernel, sizeOfDilationKernel, anchor=dilationKernelAnchor)
+        frame_threshold = cv.dilate(frame_threshold, dilationKernel, anchor=dilationAnchor, iterations=dilationIterations)
 
-        # Check if we should perform a erosion
-        if (hsvFrame.getEnableErosionVal()):
-            erosionKernel = cv.getStructuringElement(hsvFrame.getShapeOfErosionKernel(), hsvFrame.getSizeOfErosionKernel(), anchor=hsvFrame.getErosionKernelAnchor())
-            frame_threshold = cv.erode(frame_threshold, erosionKernel, anchor=hsvFrame.getErosionAnchor(), iterations=hsvFrame.getErosionIterations())
+    # Find the contours in the image
+    contours = findContours(frame_threshold)
 
-        # Check if we should perform a dilation
-        if (hsvFrame.getEnableDilationVal()):
-            dilationKernel = cv.getStructuringElement(hsvFrame.getShapeOfDilationKernel(), hsvFrame.getSizeOfDilationKernel(), anchor=hsvFrame.getDilationKernelAnchor())
-            frame_threshold = cv.dilate(frame_threshold, dilationKernel, anchor=hsvFrame.getDilationAnchor(), iterations=hsvFrame.getDilationIterations())
+    # Process the contours
+    processedContours = processContours(contours, cap.getFrameMidpoint())
 
-        hsvFrame.updateCanvas(frame_threshold)
+    # Filter the contours
+    contourAreaRange = (0.0, 1.0)
+    contourFullnessRange = (0.0, 1.0)
+    contourAspectRatioRange = (0.0, 10.0)
+    filteredContours = filterContours(processedContours, contourAreaRange, contourFullnessRange, contourAspectRatioRange, frameSize)
 
-        # Find the contours in the image
-        contours = findContours(frame_threshold)
+    target = filteredContours
 
-        # Process the contours
-        processedContours = processContours(contours, cap.getFrameMidpoint())
+    if filteredContours is not None:
+        # Sort the contours
+        sortingMode = 'center'
+        sortedContours = sortContours(filteredContours, sortingMode)
 
-        # Filter the contours
-        targetAreaRange = contourFilteringFrame.getTargetAreaRange()
-        targetFullnessRange = contourFilteringFrame.getTargetFullnessRange()
-        aspectRatioRange = contourFilteringFrame.getAspectRatioRange()
-        filteredContours = filterContours(processedContours, targetAreaRange, targetFullnessRange, aspectRatioRange, cap.getFrameSize())
+        target = [sortedContours[0]]
 
-        target = filteredContours
+        # Check if we should pair the contours
+        pairContours = True
+        intersectionLocation = 'above'
+        if (pairContours):
+            intersectionLocation = intersectionLocation
 
-        if filteredContours is not None:
-            # Sort the contours
-            sortingMode = contourFilteringFrame.getSortingMode()
-            sortedContours = sortContours(filteredContours, sortingMode)
+            targetAreaRange = (0.0, 1.0)
+            targetFullnessRange = (0.0, 1.0)
+            targetAspectRatioRange = (0.0, 10.0)
 
-            target = [sortedContours[0]]
+            # Sorting mode for the contours pairs
+            targetSortingMode = 'center'
 
-            # Check if we should pair the contours
-            if (contourPairingFrame.getEnableContourPairing()):
-                intersectionLocation = contourPairingFrame.getIntersectionLocation()
+            target = pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, targetAspectRatioRange, targetSortingMode, frameMidpoint, frameSize)
 
-                targetAreaRange = contourPairingFrame.getTargetAreaRange()
-                targetFullnessRange = contourPairingFrame.getTargetFullnessRange()
-                aspectRatioRange = contourPairingFrame.getAspectRatioRange()
+    rigidTransform = None
+    imgpts = None
+    angleToTarget = None
+    performPoseEstimation = False
+    if (performPoseEstimation and (target is not None) and (len(objectPoints) == len(target[0].getVerticies()))):
+        range = [1, len(target[0].getVerticies())]
+        rigidTransform, imgpts = VisionUtil.getTranslation(cameraMatrix, distortionCoefficients, objectPoints, target[0].getVerticies(), range)
+        angleToTarget = VisionUtil.getAngleToTarget(rigidTransform.rotation.rotationMatrix)
 
-                # Sorting mode for the contours pairs
-                sortingMode = contourPairingFrame.getSortingMode()
+    pipelineEnd = time.time()
+    print(pipelineEnd - pipelineStart)
 
-                target = pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, aspectRatioRange, sortingMode, cap.getFrameMidpoint(), cap.getFrameSize())
-
-        rigidTransform = None
-        imgpts = None
-        angleToTarget = None
-        if ((poseEstimationFrame.getEnablePoseEstimation()) and (target is not None) and (len(objectPoints) == len(target[0].getVerticies()))):
-            range = [1, len(target[0].getVerticies())]
-            if (poseEstimationFrame.getEnablePoseEstimationRange()):
-                range = poseEstimationFrame.getRange()
-            rigidTransform, imgpts = VisionUtil.getTranslation(cap.getCameraMatrix(), cap.getDistortionCoefficients(), objectPoints, target[0].getVerticies(), range)
-            angleToTarget = VisionUtil.getAngleToTarget(rigidTransform.rotation.rotationMatrix)
-
-        end = time.time()
-        print(end - start)
-
-        resolution = cap.getResolution()
-        cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + ' @' + str(cap.getFramerate()) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-        cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-        
-        if target is not None:
-            # Draw and label the remaining bits
-            frame_contours = drawContours(frame, target)
-            labelVerticies(frame_contours, target)
-            drawBoundingBoxes(frame_contours, target)
-            if (rigidTransform is not None):
-                cv.putText(frame_contours, str(rigidTransform.translation), (3, 35), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-                cv.putText(frame_contours, str(rigidTransform.rotation), (3, 47), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-                cv.putText(frame_contours, str(np.degrees(angleToTarget)), (3, 59), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-                frame_contours = drawPnPAxes(frame_contours, imgpts)
-            else:
-                drawReferenceVector(frame_contours, target)
-            contourFilteringFrame.updateCanvas(frame_contours)
-            contourPairingFrame.updateCanvas(frame_contours)
-            poseEstimationFrame.updateCanvas(frame_contours)           
+    cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + ' @' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+    cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+    
+    if target is not None:
+        # Draw and label the remaining bits
+        frame_contours = drawContours(frame, target)
+        labelVerticies(frame_contours, target)
+        drawBoundingBoxes(frame_contours, target)
+        if (rigidTransform is not None):
+            cv.putText(frame_contours, str(rigidTransform.translation), (3, 35), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+            cv.putText(frame_contours, str(rigidTransform.rotation), (3, 47), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+            cv.putText(frame_contours, str(np.degrees(angleToTarget)), (3, 59), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+            frame_contours = drawPnPAxes(frame_contours, imgpts)
         else:
-            contourFilteringFrame.updateCanvas(frame)
-            contourPairingFrame.updateCanvas(frame)
-            poseEstimationFrame.updateCanvas(frame)
+            drawReferenceVector(frame_contours, target)
+        cv.imshow('Pipeline Output', frame_contours)           
+    else:
+        cv.imshow('Pipeline Output', frame)
 
-    app.after(10, pipeline)
-
-app.after(10, pipeline)
-
-app.mainloop()
+frame = cv.imread('test\\TestImages\\test1.jpg')

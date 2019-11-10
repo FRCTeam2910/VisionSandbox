@@ -12,6 +12,7 @@ import numpy as np
 import tkinter as tk
 from PIL import ImageTk, Image
 import time
+import sys
 
 CVCamera = CVCamera.CVCamera
 VisionUtil = VisionUtil.VisionUtil
@@ -262,7 +263,7 @@ def pipeline(frame):
     contours = findContours(frame_threshold)
 
     # Process the contours
-    processedContours = processContours(contours, cap.getFrameMidpoint())
+    processedContours = processContours(contours, frameMidpoint)
 
     # Filter the contours
     contourAreaRange = (0.0, 1.0)
@@ -280,9 +281,9 @@ def pipeline(frame):
         target = [sortedContours[0]]
 
         # Check if we should pair the contours
-        pairContours = True
+        _pairContours = True
         intersectionLocation = 'above'
-        if (pairContours):
+        if (_pairContours):
             intersectionLocation = intersectionLocation
 
             targetAreaRange = (0.0, 1.0)
@@ -306,7 +307,7 @@ def pipeline(frame):
     pipelineEnd = time.time()
     print(pipelineEnd - pipelineStart)
 
-    cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + ' @' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+    cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + '@' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
     cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
     
     if target is not None:
@@ -324,5 +325,11 @@ def pipeline(frame):
         cv.imshow('Pipeline Output', frame_contours)           
     else:
         cv.imshow('Pipeline Output', frame)
+    cv.waitKey(1)
 
 frame = cv.imread('test\\TestImages\\test1.jpg')
+while True:
+    # start = time.time()
+    pipeline(frame)
+    # end = time.time()
+    # print(end - start)

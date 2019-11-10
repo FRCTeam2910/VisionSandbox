@@ -300,7 +300,7 @@ while True:
     ret = True
     if (ret):
         # Perform a median blur to remove salt and pepper noise
-        frame_median = cv.medianBlur(frame, aperture_size)
+        frame_median = frame#cv.medianBlur(frame, aperture_size)
 
         # Perform a Gaussian blur to remove Gaussian noise
         #frame_gaussian = cv.GaussianBlur(frame_median, (gaussian_kernel_size, gaussian_kernel_size), sigma_x, sigma_y)

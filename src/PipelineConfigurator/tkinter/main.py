@@ -220,7 +220,7 @@ def rotateImage(img, angle):
     widthBound = int(height * absoluteSin + width * absoluteCos)
     heightBound = int(height * absoluteCos + width * absoluteSin)
 
-    # Subtract the old image center from the rotation matrix (essentially beringing it back to the origin) and add the new corrdinates
+    # Subtract the old image center from the rotation matrix (essentially bringing it back to the origin) and add the new corrdinates
     rotationMatrix[0, 2] += widthBound / 2 - imgCenter[0]
     rotationMatrix[1, 2] += heightBound / 2 - imgCenter[1]
 

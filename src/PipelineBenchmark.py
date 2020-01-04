@@ -232,7 +232,7 @@ def pipeline(frame):
     pipelineStart = time.time()
     #  Now we threshold
     frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-    minThresh = (59, 166, 139)
+    minThresh = (60, 145, 180)
     maxThresh = (73, 255, 255)
     frame_threshold = cv.inRange(frame_hsv, minThresh, maxThresh)
 
@@ -278,10 +278,10 @@ def pipeline(frame):
         sortingMode = 'center'
         sortedContours = sortContours(filteredContours, sortingMode)
 
-        target = [sortedContours[0]]
+        # target = [sortedContours[0]]
 
         # Check if we should pair the contours
-        _pairContours = True
+        _pairContours = False
         intersectionLocation = 'above'
         if (_pairContours):
             intersectionLocation = intersectionLocation
@@ -307,8 +307,8 @@ def pipeline(frame):
     pipelineEnd = time.time()
     print(pipelineEnd - pipelineStart)
 
-    cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + '@' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
-    cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+    # cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + '@' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
+    # cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
     
     if target is not None:
         # Draw and label the remaining bits
@@ -325,11 +325,11 @@ def pipeline(frame):
         cv.imshow('Pipeline Output', frame_contours)           
     else:
         cv.imshow('Pipeline Output', frame)
-    cv.waitKey(1)
+    cv.waitKey(0)
 
 frame = cv.imread('test\\TestImages\\test1.jpg')
-while True:
+# while True:
     # start = time.time()
-    pipeline(frame)
+pipeline(frame)
     # end = time.time()
     # print(end - start)

@@ -342,7 +342,7 @@ while True:
         cv.imshow(window_capture_name, frame)
         cv.imshow(window_median_blur_name, frame_median)
         # cv.imshow(window_gaussian_blur_name, frame_gaussian)
-        cv.imshow(window_threshold_name, frame_threshold)
+        cv.imshow("thresholding view", frame_threshold)
         cv.imshow(window_contour_name, frame_contours)
     key = cv.waitKey(30)
     if key == ord("q"):

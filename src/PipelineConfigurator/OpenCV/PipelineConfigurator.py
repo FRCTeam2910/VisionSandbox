@@ -296,6 +296,8 @@ setupContourWindow()
 
 while True:
     # ret, frame = cap.read()
+    # frame = cv.imread('test\\TestImages\\OuterGoal\\BlueGoal-084in-Center.jpg')
+    # frame = cv.imread('test\\TestImages\\OuterGoal\\BlueGoal-330in-ProtectedZone.jpg')
     frame = cv.imread('test\\TestImages\\test1.jpg')
     ret = True
     if (ret):

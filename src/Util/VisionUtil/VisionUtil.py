@@ -20,14 +20,13 @@ class VisionUtil:
         numOfPoints = len(imgpts)
         pts = {}
         for i in range(numOfPoints):
-            # vector = MathHelper.norm([imgpts[i][0] - midpt[0], imgpts[i][1] - midpt[1]])
-            vector = MathHelper.norm([imgpts[i][0] - midpt[0], midpt[1] - imgpts[i][1]])
+            vector = MathHelper.norm([imgpts[i][0][0] - midpt[0], midpt[1] - imgpts[i][0][1]])
             angle = MathHelper.getAngle(x, vector, False)
             pts[angle] = imgpts[i]
         
         pts = collections.OrderedDict(sorted(pts.items()))
         
-        sortedPts = np.zeros((numOfPoints, 2), dtype=np.float32)
+        sortedPts = np.zeros((numOfPoints, 1, 2), dtype=np.int32)
         j = 0
         for i in pts:
             sortedPts[j] = pts[i]
@@ -90,7 +89,7 @@ class VisionUtil:
                                     [x, y - h]
                                     ], dtype=np.float32)
         # return the bounding box verticies, the area of the bounding box, and the aspect ratio of the width and height of the boudning box
-        return boundingBoxPoints, w * h, w / h
+        return np.array(boundingBoxPoints, dtype=np.uint8), w * h, w / h
     
     def getReferenceVector(points):
         points = VisionUtil.sortRectPoints(points)

@@ -9,107 +9,50 @@ Line = Line.Line
 VisionUtil = VisionUtil.VisionUtil
 
 class Contour:
-    def __init__(self, contourPoints, frameCenter):
+    def __init__(self, contourPoints, targetModel, frameCenter, numOfCorners):
         # First process the contour points
-        self.contourPoints = contourPoints
-        self.processedContourPoints = Contour.processPoints(contourPoints)
+        self.points = contourPoints
 
         # Find the area of the contour
-        self.contourArea = cv.contourArea(self.contourPoints)
+        self.area = cv.contourArea(self.points)
 
         # Obtain the straight bounding box
-        # self.boundingBoxPoints, self.boundingBoxArea, self.boundingBoxAspectRatio = VisionUtil.getBoundingBoxPoints(self.contourPoints)
-        x, y, self.boundingBoxWidth, self.boundingBoxHeight = cv.boundingRect(self.contourPoints)
+        self.boundingBoxPoints, self.boundingBoxArea, self.boundingBoxAspectRatio = VisionUtil.getBoundingBoxPoints(self.points)
+        x, y, self.boundingBoxWidth, self.boundingBoxHeight = cv.boundingRect(self.points)
         self.boundingBoxArea = self.boundingBoxHeight * self.boundingBoxWidth
         self.boundingBoxAspectRatio = self.boundingBoxWidth / self.boundingBoxHeight
         self.boundingBoxUpperLeftPoint = (x, y)
         self.boundingBoxLowerRightPoint = (x + self.boundingBoxWidth, y + self.boundingBoxHeight)
 
         # Find the rotated rect and it's area
-        rect = cv.minAreaRect(self.contourPoints)
+        rect = cv.minAreaRect(self.points)
         box = np.int0(cv.boxPoints(rect))
         self.rotatedRect = [box]
         self.rotatedRectArea = cv.contourArea(box)
 
         # Compute the verticies of the contour
-        self.contourVerticies = cv.approxPolyDP(contourPoints, 0.015 * cv.arcLength(contourPoints, True), True)
-        self.processedContourVerticies = Contour.processPoints(self.contourVerticies)
+        self.vertices = cv.approxPolyDP(self.points, 0.015 * cv.arcLength(self.points, True), True)
+
+        # Find the convex hull of the contour
+        self.convexHull = cv.convexHull(self.vertices)
+
+        # Apply k-means if there are duplicates
+        if (len(self.vertices) > numOfCorners) and (numOfCorners is not 0):
+            criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+            self.vertices = cv.kmeans(self.vertices.astype(dtype=np.float32), numOfCorners, None, criteria, 10, cv.KMEANS_RANDOM_CENTERS)[2]
+            self.vertices = self.vertices.reshape((numOfCorners, 1, 2)).astype(int)
 
         # Find the midpoint of the contour
-        self.midpoint = MathHelper.getMidpoint(self.processedContourVerticies)
+        self.midpoint = tuple(np.average(self.vertices, axis=0).ravel().astype(int))
 
         # Find the direction vector using the rotated rect and create a Line instance of it
-        directionVector = VisionUtil.getReferenceVector(box)
-        self.rotation = MathHelper.getAngle(MathHelper.horizontal, directionVector, True)
-        self.referenceVector = Line(directionVector, self.midpoint)
-        self.contourLine = Line(directionVector, [self.midpoint[0], frameCenter[1] * 2 - self.midpoint[1]])
+        self.directionVector = VisionUtil.getReferenceVector(box)
+        self.rotation = MathHelper.getAngle(MathHelper.horizontal, self.directionVector, True)
+        self.referenceVector = Line(self.directionVector, self.midpoint)
+        self.contourLine = Line(self.directionVector, [self.midpoint[0], frameCenter[1] * 2 - self.midpoint[1]])
 
-        # Finally, sort the image points
-        self.processedContourVerticies = VisionUtil.sortImgPts(self.processedContourVerticies, directionVector, self.midpoint)
+        # Finally, sort the vertices
+        self.vertices = VisionUtil.sortImgPts(self.vertices, self.directionVector, self.midpoint)
         
-        # Get the distance to the center of the frame
+        # Get the distance to the center of the frame (used for sorting)
         self.distanceToCenter = np.linalg.norm(np.array([self.midpoint[0] - frameCenter[0], frameCenter[1] - self.midpoint[1]]))
-
-    def processPoints(pts):
-        result = np.zeros(shape=(len(pts), 2), dtype=np.float32)
-        for i in range(len(pts)):
-            result[i][0] = pts[i][0][0]
-            result[i][1] = pts[i][0][1]
-        return result
-    
-    def getContourPoints(self):
-        return self.contourPoints
-
-    def getProcessedContourPoints(self):
-        return self.processedContourPoints
-
-    def getContourVerticies(self):
-        return self.contourVerticies
-
-    def getVerticies(self):
-        return self.processedContourVerticies
-
-    def getReferenceVector(self):
-        return self.referenceVector
-
-    def getContourLine(self):
-        return self.contourLine
-
-    def getRotation(self):
-        return self.rotation
-
-    def getContourArea(self):
-        return self.contourArea
-
-    def getRotatedRect(self):
-        return self.rotatedRect
-
-    def getRotatedRectArea(self):
-        return self.rotatedRectArea
-
-    def getBoundingBoxPoints(self):
-        return self.boundingBoxPoints
-
-    def getBoundingBoxArea(self):
-        return self.boundingBoxArea
-
-    def getBoundingBoxAspectRatio(self):
-        return self.boundingBoxAspectRatio
-
-    def getBoundingBoxUpperLeftPoint(self):
-        return self.boundingBoxUpperLeftPoint
-
-    def getBoundingBoxLowerRightPoint(self):
-        return self.boundingBoxLowerRightPoint
-
-    def getBoundingBoxWidth(self):
-        return self.boundingBoxWidth
-
-    def getBoundingBoxHeight(self):
-        return self.boundingBoxHeight
-
-    def getMidpoint(self):
-        return self.midpoint
-
-    def getDistanceToCenter(self):
-        return self.distanceToCenter

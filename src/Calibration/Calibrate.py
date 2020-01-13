@@ -33,6 +33,7 @@ for fname in images:
         objpoints.append(objp)
 
         # refine the image points
+        tempCorners = corners.copy()
         cv2.cornerSubPix(gray,corners,(9,9),(-1,-1),criteria)
         imgpoints.append(corners)
 

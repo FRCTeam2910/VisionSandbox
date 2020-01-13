@@ -70,17 +70,7 @@ class MathHelper:
 
     # get the midpoint of a contour
     def getMidpoint(pts):
-        x_mean = 0
-        for i in range(len(pts)):
-            x_mean = x_mean + pts[i][0]
-        x_mean = x_mean / len(pts)
-
-        y_mean = 0
-        for i in range(len(pts)):
-            y_mean = y_mean + pts[i][1]
-        y_mean = y_mean / len(pts)
-
-        return (int(round(x_mean)), int(round(y_mean)))
+        return 0
 
     def rotatePoint(pt, angle):
         x = (pt[0] * np.cos(angle)) - (pt[1] * np.sin(angle))

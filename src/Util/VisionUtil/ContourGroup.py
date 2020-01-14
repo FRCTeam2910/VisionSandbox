@@ -9,15 +9,18 @@ Line = Line.Line
 VisionUtil = VisionUtil.VisionUtil
 
 class ContourGroup:
-    def __init__(self, contours, targetModel, frameCenter, numOfCorners):
+    def __init__(self, contours, frameCenter, useConvexHull, numOfCorners):
         # Save the contours that comprise the group
         self.contours = contours
+
+        self.useConvexHull = useConvexHull
 
         # Combine the points from the contours
         self.vertices = ContourGroup.combinePoints(contours)
 
-        # Find the convex hull of the contour group
-        self.convexHull = cv.convexHull(self.vertices)
+        if useConvexHull:
+            # Find the convex hull of the contour group
+            self.vertices = cv.convexHull(self.vertices)
 
         # Apply k-means if there are duplicates
         if (len(self.vertices) > numOfCorners):

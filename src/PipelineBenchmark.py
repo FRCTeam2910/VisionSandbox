@@ -62,11 +62,14 @@ def drawContours(img, contours):
     contours_temp = []
     for contour in contours:
         if (isinstance(contour, ContourGroup)):
-            group_contours = contour.contours
-            for contour in group_contours:
-                contours_temp.append(contour.points)
+            if contour.useConvexHull:
+                contours_temp.append(contour.vertices)
+            else:
+                group_contours = contour.contours
+                for contour in group_contours:
+                    contours_temp.append(contour.vertices)
         else:
-            contours_temp.append(contour.points)
+            contours_temp.append(contour.vertices)
 
     img_temp = np.array(img, copy=True)
     dst = cv.drawContours(img_temp, contours_temp, -1, (203, 192, 255), 2)
@@ -89,13 +92,10 @@ def drawReferenceVector(img, contours):
         cv.circle(img, contour.midpoint, 3, (0, 100, 0), 2, cv.LINE_AA)
         cv.line(img, contour.midpoint, point, (0, 255, 0), 2, cv.LINE_AA)
 
-def labelVerticies(img, contours, useConvexHullPts):
+def labelVerticies(img, contours):
     pts = None
     for contour in contours:
-        if (useConvexHullPts):
-            pts = contour.convexHull
-        else:
-            pts = contour.vertices
+        pts = contour.vertices
         for x in range(len(pts)):
             cv.putText(img, str(x + 1), (int(pts[x][0][0]), int(pts[x][0][1])), cv.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3, cv.LINE_AA)
 
@@ -107,11 +107,11 @@ def drawPnPAxes(img, imgpts):
     return img
 
 # Methods grabbing the specific contours we want
-def processContours(contours, frameCenter, numOfCorners):
+def processContours(contours, frameCenter, useConvexHull, numOfCorners):
     processed_contours = []
     for contour in contours:
         if (cv.contourArea(contour) > 20):
-            cnt = Contour(contour, targetModel, frameCenter, numOfCorners)
+            cnt = Contour(contour, frameCenter, useConvexHull, numOfCorners)
             processed_contours.append(cnt)
     return processed_contours
 
@@ -151,7 +151,7 @@ def sortContours(filteredContours, sortingMode):
     elif (sortingMode == 'center'):
         return sorted(filteredContours, key=lambda cnt: cnt.distanceToCenter)
 
-def pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, aspectRatioRange, sortingMode, frameCenter, frameSize, numOfPairCorners):
+def pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, aspectRatioRange, sortingMode, frameCenter, frameSize, useConvexHull, numOfPairCorners):
     pairs = []
     if (intersectionLocation == 'neither'):
         for i in range(len(sortedContours)):
@@ -160,7 +160,7 @@ def pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFu
             while (j < len(sortedContours)):
                 contour = sortedContours[j]
                 _contours = [refContour, contour]
-                pair = ContourGroup(_contours, targetModel, frameCenter, numOfPairCorners)
+                pair = ContourGroup(_contours, frameCenter, useConvexHull, numOfPairCorners)
                 pairs.append(pair)
                 j = j + 1
     else:
@@ -176,19 +176,19 @@ def pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFu
                     intersectionPoint[1] = frameCenter[1] * 2 - intersectionPoint[1]
                     if (intersectionLocation == 'above' and intersectionPoint[1] < refContour.midpoint[1] and intersectionPoint[1] < contour.midpoint[1]):
                         _contours = [refContour, contour]
-                        pair = ContourGroup(_contours, targetModel, frameCenter, numOfPairCorners)
+                        pair = ContourGroup(_contours, frameCenter, useConvexHull, numOfPairCorners)
                         pairs.append(pair)
                     elif (intersectionLocation == 'below' and intersectionPoint[1] > refContour.midpoint[1] and intersectionPoint[1] > contour.midpoint[1]):
                         _contours = [refContour, contour]
-                        pair = ContourGroup(_contours, targetModel, frameCenter, numOfPairCorners)
+                        pair = ContourGroup(_contours, frameCenter, useConvexHull, numOfPairCorners)
                         pairs.append(pair)
                     elif (intersectionLocation == 'right' and intersectionPoint[0] > refContour.midpoint[0] and intersectionPoint[0] > contour.midpoint[0]):
                         _contours = [refContour, contour]
-                        pair = ContourGroup(_contours, targetModel, frameCenter, numOfPairCorners)
+                        pair = ContourGroup(_contours, frameCenter, useConvexHull, numOfPairCorners)
                         pairs.append(pair)
                     elif (intersectionLocation == 'left' and intersectionPoint[0] < refContour.midpoint[0] and intersectionPoint[0] < contour.midpoint[0]):
                         _contours = [refContour, contour]
-                        pair = ContourGroup(_contours, targetModel, frameCenter, numOfPairCorners)
+                        pair = ContourGroup(_contours, frameCenter, useConvexHull, numOfPairCorners)
                         pairs.append(pair)
                 j = j + 1
     # Now filter the pairs
@@ -239,14 +239,15 @@ def pipeline(frame):
     pipelineStart = time.time()
     #  Now we threshold
     frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-    
+
     # 2019 target thresholding values
-    # minThresh = (69, 225, 165)
-    # maxThresh = (87, 255, 255)
+    # minThresh = (57, 105, 154)
+    # maxThresh = (72, 255, 255)
 
     # 2020 target thresholding values
-    minThresh = (57, 105, 154)
-    maxThresh = (72, 255, 255)
+    minThresh = (69, 225, 165)
+    maxThresh = (87, 255, 255)
+
     frame_threshold = cv.inRange(frame_hsv, minThresh, maxThresh)
 
     performErosion = False
@@ -277,7 +278,8 @@ def pipeline(frame):
 
     # Process the contours
     numOfContourCorners = 4
-    processedContours = processContours(contours, frameMidpoint, numOfContourCorners)
+    contourConvexHull = True
+    processedContours = processContours(contours, frameMidpoint, contourConvexHull, numOfContourCorners)
 
     # Filter the contours
     contourAreaRange = (0.0, 1.0)
@@ -295,7 +297,7 @@ def pipeline(frame):
         target = [sortedContours[0]]
 
         # Check if we should pair the contours
-        _pairContours = True
+        _pairContours = False
         intersectionLocation = 'above'
         if (_pairContours):
             intersectionLocation = intersectionLocation
@@ -307,8 +309,9 @@ def pipeline(frame):
             # Sorting mode for the contours pairs
             targetSortingMode = 'center'
 
-            numOfPairCorners = 8
-            target = pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, targetAspectRatioRange, targetSortingMode, frameMidpoint, frameSize, numOfPairCorners)
+            useConvexHull = True
+            numOfPairCorners = 6
+            target = pairContours(sortedContours, intersectionLocation, targetAreaRange, targetFullnessRange, targetAspectRatioRange, targetSortingMode, frameMidpoint, frameSize, useConvexHull, numOfPairCorners)
 
     rigidTransform = None
     imgpts = None
@@ -325,15 +328,11 @@ def pipeline(frame):
     cv.putText(frame, str(resolution[0]) + 'x' + str(resolution[1]) + '@' + str(framerate) + ' fps', (3, 11), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
     cv.putText(frame, 'Contours found: ' + str(len(contours)), (3, 23), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
     
-    useConvexHull = True
     if target is not None:
         # Draw and label the remaining bits
         frame = drawContours(frame, target)
-        labelVerticies(frame, target, useConvexHull)
-        if useConvexHull:
-            cv.drawContours(frame, [target[0].convexHull], -1, (149, 240, 231), thickness=2)
-        else:
-            drawBoundingBoxes(frame, target)
+        labelVerticies(frame, target)
+        drawBoundingBoxes(frame, target)
         if (rigidTransform is not None):
             cv.putText(frame, str(rigidTransform.translation), (3, 35), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
             cv.putText(frame, str(rigidTransform.rotation), (3, 47), font, 0.35, (255, 255, 255), 1, cv.LINE_AA)
@@ -346,13 +345,13 @@ def pipeline(frame):
         cv.imshow('Pipeline Output', frame)
     cv.waitKey(0)
 
-frame = cv.imread('test\\TestImages\\test1.jpg')
-pipeline(frame)
+# frame = cv.imread('test\\TestImages\\test1.jpg')
+# pipeline(frame)
 
-# pathToFrames = 'test\\TestImages\\OuterGoal\\*.jpg'
-# frames = glob.glob(pathToFrames)
+pathToFrames = 'test\\TestImages\\OuterGoal\\*.jpg'
+frames = glob.glob(pathToFrames)
 
-# for frame in frames:
-#     frame = cv.imread(frame)
-#     pipeline(frame)
-#     time.sleep(0.01)
+for frame in frames:
+    frame = cv.imread(frame)
+    pipeline(frame)
+    time.sleep(0.01)
